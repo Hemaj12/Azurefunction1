@@ -1,0 +1,15 @@
+{
+  "profiles": {
+    "IDEXCustAzure": {
+      "commandName": "Project",
+      "commandLineArgs": "--port 7101"
+    },
+    "Container (Dockerfile)": {
+      "commandName": "Docker",
+      "launchUrl": "{Scheme}://{ServiceHost}:{ServicePort}",
+      "DockerfileRunArguments": "--init",
+      "httpPort": 33208,
+      "useSSL": false
+    }
+  }
+}
