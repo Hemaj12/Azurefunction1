@@ -53,6 +53,8 @@ namespace IDEXCustAzure
                             {
                                 using (SqlDataReader reader = await fetchCommand.ExecuteReaderAsync())
                                 {
+                                    var allData = new List<Dictionary<string, object>>(); // List to hold all rows
+
                                     while (await reader.ReadAsync())
                                     {
                                         try
@@ -68,26 +70,29 @@ namespace IDEXCustAzure
                                                 data[columnName] = columnValue;
                                             }
 
-                                            // Convert the data into JSON format
-                                            string jsonData = JsonConvert.SerializeObject(data);
-
-                                            // Send the data to the target API
-                                            var content = new StringContent(jsonData, Encoding.UTF8, "application/json");
-                                            HttpResponseMessage response = await _httpClient.PostAsync(targetApiUrl, content);
-
-                                            if (response.IsSuccessStatusCode)
-                                            {
-                                                _logger.LogInformation($"Data sent successfully: {jsonData}");
-                                            }
-                                            else
-                                            {
-                                                _logger.LogError($"Failed to send data: {response.StatusCode}");
-                                            }
+                                            // Add the data to the list
+                                            allData.Add(data);
                                         }
                                         catch (Exception ex)
                                         {
                                             _logger.LogError(ex, "Error while processing row data.");
                                         }
+                                    }
+
+                                    // Convert the list of data into JSON format
+                                    string jsonData = JsonConvert.SerializeObject(allData);
+
+                                    // Send the entire data to the target API in one request
+                                    var content = new StringContent(jsonData, Encoding.UTF8, "application/json");
+                                    HttpResponseMessage response = await _httpClient.PostAsync(targetApiUrl, content);
+
+                                    if (response.IsSuccessStatusCode)
+                                    {
+                                        _logger.LogInformation($"Data sent successfully: {jsonData}");
+                                    }
+                                    else
+                                    {
+                                        _logger.LogError($"Failed to send data: {response.StatusCode}");
                                     }
                                 }
                             }
@@ -109,4 +114,5 @@ namespace IDEXCustAzure
             }
         }
     }
+
 }
