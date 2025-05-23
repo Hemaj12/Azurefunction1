@@ -22,7 +22,7 @@ namespace IDEXCustAzure
 
         
         [Function("Function1")]
-        public async Task Run([TimerTrigger("* */5 * * * *")] TimerInfo myTimer)
+        public async Task Run([TimerTrigger("* */10 * * * *")] TimerInfo myTimer)
         {
             try
             {
