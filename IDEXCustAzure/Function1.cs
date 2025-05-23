@@ -20,6 +20,7 @@ namespace IDEXCustAzure
             _logger = loggerFactory.CreateLogger<Function1>();
         }
 
+        
         [Function("Function1")]
         public async Task Run([TimerTrigger("* */5 * * * *")] TimerInfo myTimer)
         {
