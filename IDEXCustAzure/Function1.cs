@@ -37,7 +37,7 @@ namespace IDEXCustAzure
                     _logger.LogInformation($"Next timer schedule at: {myTimer.ScheduleStatus.Next}");
                 }
 
-                string sourceConnectionString = "Server=DESKTOP-89R6D9P\\SQLEXPRESS;Database=jdeapidev;User ID=idexfield;Password=admin;Connect Timeout=60;";
+                string sourceConnectionString = "Server=DESKTOP-89R6D9P\\SQLEXPRESS;Database=jdeapidev;User ID=jdeapidev;Password=Idexlc1@3;Connect Timeout=60;";
                 string targetApiUrl = Environment.GetEnvironmentVariable("TargetApiUrl") ?? "https://myidexhubdevbackend.idexasia.com/api/v1/jde/customer/update/trigger";
 
                 using (SqlConnection sourceConnection = new SqlConnection(sourceConnectionString))
