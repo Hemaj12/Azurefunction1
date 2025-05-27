@@ -13,7 +13,11 @@ namespace IDEXCustAzure
     public class Function1
     {
         private readonly ILogger _logger;
-        private readonly HttpClient _httpClient = new HttpClient();
+        private readonly HttpClient _httpClient = new HttpClient
+        {
+            Timeout = Timeout.InfiniteTimeSpan
+        };
+        private const string SyncFilePath = "/tmp/lastSyncVersion.txt";
 
         public Function1(ILoggerFactory loggerFactory)
         {
@@ -21,8 +25,8 @@ namespace IDEXCustAzure
         }
 
         
-        [Function("Function1")]
-        public async Task Run([TimerTrigger("* */10 * * * *")] TimerInfo myTimer)
+        [Function("Function1")]    
+        public async Task Run([TimerTrigger("*/20 * * * * *")] TimerInfo myTimer)
         {
             try
             {
@@ -33,81 +37,77 @@ namespace IDEXCustAzure
                     _logger.LogInformation($"Next timer schedule at: {myTimer.ScheduleStatus.Next}");
                 }
 
-                // Get connection string and target API URL from environment variables
-                // string sourceConnectionString = "Server=jdeapidevdbserver.database.windows.net;Database=jdeapidev;User ID=jdeapidev;Password=Idexlc1@3;Connect Timeout=60;";
-                string sourceConnectionString = "Server=jdeapiproddbserver.database.windows.net;Database=jdeapiprod;User ID=jdeapiprodadmin;Password=Idexlc1@3;Connect Timeout=60;";
-                
-                // string targetApiUrl = Environment.GetEnvironmentVariable("TargetApiUrl") ?? "https://myidexhubdevbackend.idexasia.com/api/v1/jde/customer/update/trigger";
-                string targetApiUrl = Environment.GetEnvironmentVariable("TargetApiUrl") ?? "https://myidexhubprod.azurewebsites.net/api/v1/jde/customer/update/trigger";
-                
+                string sourceConnectionString = "Server=DESKTOP-89R6D9P\\SQLEXPRESS;Database=jdeapidev;User ID=idexfield;Password=admin;Connect Timeout=60;";
+                string targetApiUrl = Environment.GetEnvironmentVariable("TargetApiUrl") ?? "https://myidexhubdevbackend.idexasia.com/api/v1/jde/customer/update/trigger";
+
                 using (SqlConnection sourceConnection = new SqlConnection(sourceConnectionString))
                 {
-                    try
+                    await sourceConnection.OpenAsync();
+
+                    // Step 1: Read last sync version from database
+                    long lastVersion = 0;
+                    var getLastVersionCmd = new SqlCommand("SELECT LastSyncVersion FROM SyncVersionTracker WHERE TableName = 'JdeCustomerMaster'", sourceConnection);
+                    var lastVersionObj = await getLastVersionCmd.ExecuteScalarAsync();
+                    if (lastVersionObj != null && long.TryParse(lastVersionObj.ToString(), out long parsedVersion))
                     {
-                        await sourceConnection.OpenAsync();
-                        _logger.LogInformation("Database connection established successfully.");
+                        lastVersion = parsedVersion;
+                    }
 
-                        // Updated query without the __$operation filter
-                        string fetchChangesQuery = "SELECT * FROM JdeCustomerMaster"; // Adjust if needed
+                    // Step 2: Get current version
+                    var currentVersionCmd = new SqlCommand("SELECT CHANGE_TRACKING_CURRENT_VERSION()", sourceConnection);
+                    long currentVersion = (long)await currentVersionCmd.ExecuteScalarAsync();
 
-                        using (SqlCommand fetchCommand = new SqlCommand(fetchChangesQuery, sourceConnection))
+                    // Step 3: Fetch changed rows since last version
+                    string fetchChangesQuery = @"
+                SELECT c.*, CT.SYS_CHANGE_OPERATION
+                FROM CHANGETABLE(CHANGES dbo.JdeCustomerMaster, @lastVersion) AS CT
+                JOIN dbo.JdeCustomerMaster c ON c.id = CT.id";
+
+                    var fetchCommand = new SqlCommand(fetchChangesQuery, sourceConnection);
+                    fetchCommand.Parameters.AddWithValue("@lastVersion", lastVersion);
+
+                    var changedRows = new List<Dictionary<string, object>>();
+
+                    using (var reader = await fetchCommand.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
                         {
-                            try
+                            var row = new Dictionary<string, object>();
+                            for (int i = 0; i < reader.FieldCount; i++)
                             {
-                                using (SqlDataReader reader = await fetchCommand.ExecuteReaderAsync())
-                                {
-                                    var allData = new List<Dictionary<string, object>>(); // List to hold all rows
-
-                                    while (await reader.ReadAsync())
-                                    {
-                                        try
-                                        {
-                                            // Create a dictionary to hold the row data dynamically
-                                            var data = new Dictionary<string, object>();
-
-                                            // Loop through all columns and add them to the dictionary
-                                            for (int i = 0; i < reader.FieldCount; i++)
-                                            {
-                                                string columnName = reader.GetName(i);
-                                                object columnValue = reader.GetValue(i);
-                                                data[columnName] = columnValue;
-                                            }
-
-                                            // Add the data to the list
-                                            allData.Add(data);
-                                        }
-                                        catch (Exception ex)
-                                        {
-                                            _logger.LogError(ex, "Error while processing row data.");
-                                        }
-                                    }
-
-                                    // Convert the list of data into JSON format
-                                    string jsonData = JsonConvert.SerializeObject(allData);
-
-                                    // Send the entire data to the target API in one request
-                                    var content = new StringContent(jsonData, Encoding.UTF8, "application/json");
-                                    HttpResponseMessage response = await _httpClient.PostAsync(targetApiUrl, content);
-
-                                    if (response.IsSuccessStatusCode)
-                                    {
-                                        _logger.LogInformation($"Data sent successfully: {jsonData}");
-                                    }
-                                    else
-                                    {
-                                        _logger.LogError($"Failed to send data: {response.StatusCode}");
-                                    }
-                                }
+                                string columnName = reader.GetName(i);
+                                object columnValue = reader.GetValue(i);
+                                row[columnName] = columnValue;
                             }
-                            catch (Exception ex)
-                            {
-                                _logger.LogError(ex, "Error executing fetch command or reading data.");
-                            }
+                            changedRows.Add(row);
+                        }
+                    } // Close the reader before executing another command
+
+                    // Step 4: Send data to API
+                    if (changedRows.Count > 0)
+                    {
+                        string jsonData = JsonConvert.SerializeObject(changedRows);
+                        var content = new StringContent(jsonData, Encoding.UTF8, "application/json");
+
+                        var response = await _httpClient.PostAsync(targetApiUrl, content);
+                        if (response.IsSuccessStatusCode)
+                        {
+                            _logger.LogInformation($"Successfully sent {changedRows.Count} records.");
+                            var updateVersionCmd = new SqlCommand("UPDATE SyncVersionTracker SET LastSyncVersion = @currentVersion WHERE TableName = 'JdeCustomerMaster'", sourceConnection);
+                            updateVersionCmd.Parameters.AddWithValue("@currentVersion", currentVersion);
+                            await updateVersionCmd.ExecuteNonQueryAsync();
+                        }
+                        else
+                        {
+                            _logger.LogError($"Failed to send data. HTTP status: {response.StatusCode}");
                         }
                     }
-                    catch (Exception ex)
+                    else
                     {
-                        _logger.LogError(ex, "Error establishing database connection.");
+                        _logger.LogInformation("No new or updated records found.");
+                        var updateVersionCmd = new SqlCommand("UPDATE SyncVersionTracker SET LastSyncVersion = @currentVersion WHERE TableName = 'JdeCustomerMaster'", sourceConnection);
+                        updateVersionCmd.Parameters.AddWithValue("@currentVersion", currentVersion);
+                        await updateVersionCmd.ExecuteNonQueryAsync();
                     }
                 }
             }
@@ -116,6 +116,7 @@ namespace IDEXCustAzure
                 _logger.LogError(ex, "An error occurred in the function execution.");
             }
         }
+
     }
 
 }
