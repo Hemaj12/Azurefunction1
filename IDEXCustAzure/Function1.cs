@@ -31,7 +31,7 @@ namespace IDEXCustAzure
         }
 
         [Function("Function1")]
-        public async Task Run([TimerTrigger("0 */1 * * * *")] TimerInfo myTimer)
+        public async Task Run([TimerTrigger("0 */5 * * * *")] TimerInfo myTimer)
         {
             try
             {
@@ -276,4 +276,5 @@ namespace IDEXCustAzure
         }
     }
 }
+
 
