@@ -31,7 +31,7 @@ namespace IDEXCustAzure
         }
 
         [Function("Function1")]
-        public async Task Run([TimerTrigger("0 */5 * * * *")] TimerInfo myTimer)
+        public async Task Run([TimerTrigger("0 */1 * * * *")] TimerInfo myTimer)
         {
             try
             {
@@ -166,6 +166,8 @@ namespace IDEXCustAzure
                                 simpleRows.Add(row);
                             }
                         }
+                        await fetchCommandSimple.DisposeAsync(); // dispose command properly
+
 
                         // ================= PaymentTermsMilestone =================
                         long lastVersionMilestone = 0;
@@ -211,6 +213,7 @@ namespace IDEXCustAzure
                                 milestoneRows.Add(row);
                             }
                         }
+                        await fetchCommandMilestone.DisposeAsync();
 
                         // ================= Combine & Send =================
                         if (simpleRows.Count > 0 || milestoneRows.Count > 0)
@@ -257,8 +260,13 @@ namespace IDEXCustAzure
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "An error occurred while syncing PaymentTerms.");
+                        _logger.LogError(ex,
+                            $"[PaymentTerms] Error: {ex.Message}. " +
+                            $"Source: {ex.Source}. " +
+                            $"StackTrace: {ex.StackTrace}"
+                        );
                     }
+
                 }
             }
             catch (Exception ex)
