@@ -43,7 +43,7 @@ namespace IDEXCustAzure
 
                 string sourceConnectionString = "Server=jdeapidevdbserver.database.windows.net;Database=jdeapidev;User ID=jdeapidev;Password=Idexlc1@3;Connect Timeout=60;";
                 string targetApiUrlCustomer = Environment.GetEnvironmentVariable("TargetApiUrl") ?? "https://myidexhubdevbackend.idexasia.com/api/v1/jde/customer/update/trigger";
-                string targetApiUrlPayment = Environment.GetEnvironmentVariable("TargetApiUrlPayment") ?? "https://myidexhubdevtestbackend.azurewebsites.net/api/v1/jde/paymentTerm/update/trigger";
+                string targetApiUrlPayment = Environment.GetEnvironmentVariable("TargetApiUrlPayment") ?? "https://myidexhubdevbackend.idexasia.com/api/v1/jde/paymentTerm/update/trigger";
 
                 // string sourceConnectionString = "Server=jdeapiproddbserver.database.windows.net;Database=jdeapiprod;User ID=jdeapiprodadmin;Password=Idexlc1@3;Connect Timeout=60;";
                 // string targetApiUrlCustomer = Environment.GetEnvironmentVariable("TargetApiUrl") ?? "https://myidexhubprod.azurewebsites.net/api/v1/jde/customer/update/trigger";
@@ -276,3 +276,4 @@ namespace IDEXCustAzure
         }
     }
 }
+
